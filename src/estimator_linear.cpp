@@ -7,10 +7,12 @@
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Float32.h>
 #include <turtlesim/Pose.h>
+#include <string>
 
 
 #define image_height 480
 #define image_width 640
+
 
 cv_bridge::CvImage dimg;
 
@@ -43,9 +45,23 @@ private:
 
 //コンストラクタ 
 depth_estimater::depth_estimater(){
+
     //ここに入力するトピックを書く
+/*
     sub_depth = nh.subscribe<sensor_msgs::Image>("/camera/depth/image_rect_raw", 1, &depth_estimater::depthImageCallback, this);//for gazebo-> /pico_flexx_link/depth_registered/image_raw
     sub_rgb = nh.subscribe<sensor_msgs::Image>("/camera/color/image_raw", 1, &depth_estimater::rgbImageCallback, this);
+
+    sub_depth = nh.subscribe<sensor_msgs::Image>("/pico_flexx_link/depth_registered/image_raw", 1, &depth_estimater::depthImageCallback, this);//for gazebo-> /pico_flexx_link/depth_registered/image_raw
+    sub_rgb = nh.subscribe<sensor_msgs::Image>("/pico_flexx_link_ir/image_raw", 1, &depth_estimater::rgbImageCallback, this);
+
+            <param name="input_depth_image_topic" value="/pico_flexx_link/depth_registered/image_raw"/>
+            <param name="input_color_image_topic" value="/pico_flexx_link_ir/image_raw"/>
+
+*/
+    sub_depth = nh.subscribe<sensor_msgs::Image>("/camera/depth/image_rect_raw", 1, &depth_estimater::depthImageCallback, this);//for gazebo-> /pico_flexx_link/depth_registered/image_raw
+    sub_rgb = nh.subscribe<sensor_msgs::Image>("/camera/color/image_raw", 1, &depth_estimater::rgbImageCallback, this);
+
+
     //for gazebo-> /pico_flexx_link_ir/image_raw
     center_pub = nh.advertise<std_msgs::Float32>("/cabbage/center", 1, 100);
 
@@ -91,15 +107,13 @@ void depth_estimater::rgbImageCallback(const sensor_msgs::ImageConstPtr& msg){
     for(i = 0; i < image_height; i++){
         cv::line(cv_ptr->image, cv::Point(center[i], i), cv::Point(center[i], i), cv::Scalar(0,200,0), 3, 4);  
         }
-    cv::imshow("RGB image", cv_ptr->image);
-    cv::waitKey(10);
-
-    //重心を表示。これに従ってロボットのタイヤの左右の出力差を出す。mass_center未実装
-//  cv::line(cv_ptr->image, cv::Point(mass_center, 0), cv::Point(mass_center, 0), cv::Scalar(255,0,0), 2, 4);
 
     //直線近似の直線
-    cv::line(cv_ptr->image, cv::Point(x_0, 0), cv::Point(x_max, cv_ptr->image.rows), cv::Scalar(255,0,0), 2, 4);
+    cv::line(cv_ptr->image, cv::Point(x_0, 0), cv::Point(x_max, 480), cv::Scalar(255,0,0), 2, 4);
 
+
+    cv::imshow("RGB image", cv_ptr->image);
+    cv::waitKey(10);
 
     //publish image_rgb
     sensor_msgs::ImagePtr image_rbg_processed = cv_bridge::CvImage(std_msgs::Header(), "bgr8", cv_ptr->image).toImageMsg();
@@ -166,7 +180,7 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
 
             if(Dimage[j] > 0.0){
                 //畝かどうかの判断
-                if(Dimage[j] < 450){//ある距離より近くまで、畝が近づいた時 807良さげ
+                if(Dimage[j] < threshold){//ある距離より近くまで、畝が近づいた時 807良さげ
                     ridge_region[i][j] = 1;//畝だったらtrue
                     sum_i += j;
                     count++;
@@ -201,7 +215,8 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
         sum_all_i = sum_all_i + sum_i / count;//全部の行の真ん中の画素を足しあわせる。
     }
 
-    threshold = int((max_height + min_height)/2*0.9);//閾値をとりあえず最大と最小の真ん中にする
+    threshold = int((max_height + min_height)/2*0.95);//閾値をとりあえず最大と最小の真ん中にする
+    ROS_INFO( "max:%d  min:%d", max_height, min_height);
     ROS_INFO( "threshold:%d", threshold);
 
     /***最小二乗法***/
@@ -248,7 +263,8 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
 
 
 int main(int argc, char **argv){
-    ros::init(argc, argv, "depth_estimater");
+
+    ros::init(argc, argv, "ridge_center_estimater");
 
     depth_estimater depth_estimater;
 

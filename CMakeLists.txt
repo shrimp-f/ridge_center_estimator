@@ -203,7 +203,16 @@ include_directories(
 
 find_package( OpenCV REQUIRED )
 include_directories(  ${catkin_INCLUDE_DIRS}  ${OpenCV_INCLUDE_DIRS} )
+
 add_executable(estimator src/estimator.cpp)
 target_link_libraries(estimator ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+
 add_executable(estimator_linear src/estimator_linear.cpp)
 target_link_libraries(estimator_linear ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+
+add_executable(estimator_linear_debug src/estimator_linear_debug.cpp)
+target_link_libraries(estimator_linear_debug ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+
+add_executable(estimator_linear_for_gazebo src/estimator_linear_for_gazebo.cpp)
+target_link_libraries(estimator_linear_for_gazebo ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+

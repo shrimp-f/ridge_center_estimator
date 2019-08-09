@@ -19,7 +19,7 @@
 cv_bridge::CvImage dimg;
 
 //cameraに映るdepthの最大と最小を求めて、畝かどうかの判別の閾値を作る。
-int threshold = 400;
+double threshold = 0.70;
 
 //直線近似の直線引くよう
 int x_0 = 320;
@@ -30,7 +30,7 @@ class depth_estimater{
 public:
     depth_estimater();
     ~depth_estimater();
-    int center[image_height];//畝の中央の画素の位置を格納する配列。縦は480画素なので
+    double center[image_height];//畝の中央の画素の位置を格納する配列。縦は480画素なので
     bool ridge_region[image_height][image_width];//畝の領域を示す配列。畝だと認識されたら1、畝じゃなかったら0が入る。
     float center_center;//畝の中央の画素の位置の全部の行の平均。畝の中心線の重心。
     void depthImageCallback(const sensor_msgs::ImageConstPtr& msg);
@@ -60,8 +60,8 @@ depth_estimater::depth_estimater(){
             <param name="input_color_image_topic" value="/pico_flexx_link_ir/image_raw"/>
 
 */
-    sub_depth = nh.subscribe<sensor_msgs::Image>("/camera/depth/image_rect_raw", 1, &depth_estimater::depthImageCallback, this);//for gazebo-> /pico_flexx_link/depth_registered/image_raw
-    sub_rgb = nh.subscribe<sensor_msgs::Image>("/camera/color/image_raw", 1, &depth_estimater::rgbImageCallback, this);
+    sub_depth = nh.subscribe<sensor_msgs::Image>("/pico_flexx_link/depth_registered/image_raw", 1, &depth_estimater::depthImageCallback, this);//for gazebo-> /pico_flexx_link/depth_registered/image_raw
+    sub_rgb = nh.subscribe<sensor_msgs::Image>("/pico_flexx_link_ir/image_raw", 1, &depth_estimater::rgbImageCallback, this);
 
 
     //for gazebo-> /pico_flexx_link_ir/image_raw
@@ -146,7 +146,7 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
     cv_bridge::CvImagePtr cv_ptr2;//ptrメソッド
 
     //畝の高さとか低さとか
-    int min_height = 10000;
+    int min_height = 99999;
     int max_height = 0;
 
     try{
@@ -182,6 +182,17 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
                 max_height = Dimage[j];
             }
 
+                //debug用のdepth値を調べるためのところ。iが縦、jが横。iの最大は479で、jの最大は639。
+                if(i==139 && j==10){
+//                    ROS_INFO("240行目の320列目のdepth : %f ", Dimage[j]);
+                    ROS_INFO("%d行目の%d列目のdepth : %f ", i,j,Dimage[j]);
+                    ROS_INFO("center[%d] : %8.3f ", i,center[i]);
+
+//                    ROS_INFO("139行目の293列目のdepth[m?] : %d ", Ivimage[j]);
+                }else{
+                }
+
+
             if(Dimage[j] > 0.0){
                 //畝かどうかの判断
                 if(Dimage[j] < threshold){//ある距離より近くまで、畝が近づいた時 807良さげ
@@ -201,15 +212,15 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
         }
 
         center[i] = sum_of_one_ridge_line_depth / num_of_pixel_in_ridge_line;//畝の真ん中の画素の位置を出す。
-        if(center[i] > 0){
+        if(center[i] > 0.){
             num_of_ridge_line++;
         }
         sum_all_i = sum_all_i + sum_of_one_ridge_line_depth / num_of_pixel_in_ridge_line;//全部の行の真ん中の画素を足しあわせる。
     }
 
-    threshold = int((max_height + min_height)/2* THRESHOLD_RATIO);//閾値をとりあえず最大と最小の真ん中にする
+//    threshold = int((max_height + min_height)/2* THRESHOLD_RATIO);//閾値をとりあえず最大と最小の真ん中にする
     ROS_INFO( "max:%d  min:%d", max_height, min_height);
-    ROS_INFO( "threshold:%d", threshold);
+    ROS_INFO( "threshold:%8.3fl", threshold);
 
 
     /***最小二乗法***/
@@ -219,7 +230,7 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
     ROS_INFO("num_of_ridge_line : %d", num_of_ridge_line);
     double sigma_x, sigma_y, sigma_xy, sigma_xx;
     for(int i=0; i<cv_ptr->image.rows; i++){
-        if(center[i] > 0){//center[i]がnanじゃないときのみ追加
+        if(center[i] > 0.){//center[i]がnanじゃないときのみ追加
             sigma_xy += i * center[i];
             sigma_x += i;
             sigma_y += center[i];

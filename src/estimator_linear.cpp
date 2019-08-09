@@ -13,6 +13,8 @@
 #define image_height 480
 #define image_width 640
 
+//畝の領域推定のときの閾値計算の割合
+#define THRESHOLD_RATIO 0.9
 
 cv_bridge::CvImage dimg;
 
@@ -134,9 +136,11 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
     int x1, x2, y1, y2;
     int i, j, k;
 
-    float sum_i = 0.0;
+    //水平方向の1行の畝の領域のことをridge_lineと呼ぶことにする。
+    //これは、ridge_lineのかず。たまに畝領域が0の行が出るので、その分を除いてカウントするため。
+    int num_of_ridge_line = 0;
+
     float sum_all_i = 0.0;
-    int count = 0;
     double ave;
     cv_bridge::CvImagePtr cv_ptr;//ptrメソッド
     cv_bridge::CvImagePtr cv_ptr2;//ptrメソッド
@@ -165,8 +169,8 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
         char* Ivimage = img.ptr<char>(i);
         short* Simage = img3.ptr<short>(i);
 
-        sum_i = 0.0;//sumをリセット。
-        count = 0;
+        float sum_of_one_ridge_line_depth = 0.0;//水平方向の畝領域のdpethの合計。行が変わるたびにリセット。
+        int num_of_pixel_in_ridge_line = 0; //水平方向の畝領域のピクセル数。
 
         //全領域走査
         //jは列(左右方向)
@@ -182,52 +186,45 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
                 //畝かどうかの判断
                 if(Dimage[j] < threshold){//ある距離より近くまで、畝が近づいた時 807良さげ
                     ridge_region[i][j] = 1;//畝だったらtrue
-                    sum_i += j;
-                    count++;
+                    sum_of_one_ridge_line_depth += j;
+                    num_of_pixel_in_ridge_line++;
                 }else{
                     ridge_region[i][j] = 0;//畝じゃなかったらfalse
                 }
             }else{
             }
         }
-/*
-        //jで横幅調整して走査
-        for(j = 0 ; j < (cv_ptr->image.cols); j++){//j = 0 ; j < cv_ptr->image.cols; j++
-            if(Dimage[j] > 0.0){
-                Iimage[j] = Dimage[j];//Dimageのj番目の画素にアクセスし、それをIimage[j]に代入 Dimageが既に[mm]になってるっぽい？
-//                Ivimage[j] = (char)(255*(Dimage[j]/100000));//距離値を取得できる最大距離で割り、255をかける。255,5.5初期値
 
-                if(Dimage[j] < 450){//ある距離より近くまで、畝が近づいた時 807良さげ
-                    sum_i += j;
-                    count++;
-                }else{
-                }
-            }else{
-            }
-        }
-*/
         //img3に代入し直し。本来は16UC1なのにcv_bridge::toCvCopyでうまくいかないので。
         for(j = 0 ; j < (cv_ptr->image.cols); j++){//j = 0 ; j < cv_ptr->image.cols; j++
             Simage[j] = (short)Dimage[j];
         }
 
-        center[i] = sum_i / count;//畝の真ん中の画素の位置を出す。
-        sum_all_i = sum_all_i + sum_i / count;//全部の行の真ん中の画素を足しあわせる。
+        center[i] = sum_of_one_ridge_line_depth / num_of_pixel_in_ridge_line;//畝の真ん中の画素の位置を出す。
+        if(center[i] > 0){
+            num_of_ridge_line++;
+        }
+        sum_all_i = sum_all_i + sum_of_one_ridge_line_depth / num_of_pixel_in_ridge_line;//全部の行の真ん中の画素を足しあわせる。
     }
 
-    threshold = int((max_height + min_height)/2*0.95);//閾値をとりあえず最大と最小の真ん中にする
+    threshold = int((max_height + min_height)/2* THRESHOLD_RATIO);//閾値をとりあえず最大と最小の真ん中にする
     ROS_INFO( "max:%d  min:%d", max_height, min_height);
     ROS_INFO( "threshold:%d", threshold);
 
+
     /***最小二乗法***/
     double a,b;
-    double n = cv_ptr->image.rows;
+//    double n = cv_ptr->image.rows;//ここエラーの原因。depth拾えてない文も計算してしまってる。
+    double n = num_of_ridge_line;//ここエラーの原因。depth拾えてない文も計算してしまってる。
+    ROS_INFO("num_of_ridge_line : %d", num_of_ridge_line);
     double sigma_x, sigma_y, sigma_xy, sigma_xx;
-    for(int i=0; i<n; i++){
-        sigma_xy += i * center[i];
-        sigma_x += i;
-        sigma_y += center[i];
-        sigma_xx += i * i;
+    for(int i=0; i<cv_ptr->image.rows; i++){
+        if(center[i] > 0){//center[i]がnanじゃないときのみ追加
+            sigma_xy += i * center[i];
+            sigma_x += i;
+            sigma_y += center[i];
+            sigma_xx += i * i;
+        }
     }
     a = (n*sigma_xy - sigma_x*sigma_y)/(n*sigma_xx - sigma_x*sigma_x);
     b = (sigma_xx*sigma_y - sigma_xy*sigma_x)/(n*sigma_xx - sigma_x*sigma_x);

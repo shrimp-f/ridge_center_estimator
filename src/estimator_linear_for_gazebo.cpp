@@ -41,6 +41,7 @@ private:
     ros::Subscriber sub_rgb, sub_depth;
     ros::Publisher center_pub, d_pub;
     ros::Publisher d_rgb_pub;
+    ros::Publisher center_distance_pub, ridge_angle_pub;
     image_transport::Publisher rgb_pub;
 
 };
@@ -65,7 +66,9 @@ depth_estimater::depth_estimater(){
 
 
     //for gazebo-> /pico_flexx_link_ir/image_raw
-    center_pub = nh.advertise<std_msgs::Float32>("/cabbage/center", 1, 100);
+    center_pub = nh.advertise<std_msgs::Float32>("/cabbage/center", 1, 10);
+    center_distance_pub = nh.advertise<std_msgs::Float32>("/estimator_linear/center_distance", 1, 10);
+    ridge_angle_pub = nh.advertise<std_msgs::Float32>("/estimator_linear/ridge_angle", 1, 10);
 
      //open cvの画像をrosトピックとしてパブリッシュするため。
     image_transport::ImageTransport it(nh);
@@ -241,9 +244,19 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
     b = (sigma_xx*sigma_y - sigma_xy*sigma_x)/(n*sigma_xx - sigma_x*sigma_x);
 
     x_0 = int(b);
-    x_max = int(a*n + b);
+    x_max = int(a*cv_ptr->image.rows + b);
     ROS_INFO("a: %8.3lf  b: %8.3lf", a, b);
     ROS_INFO("x_0 : %d  x_max : %d", x_0, x_max);
+
+    std_msgs::Float32 center_distance_float32; // TODO　単位どうしよ？
+    std_msgs::Float32 ridge_angle_float32; //rad
+    ridge_angle_float32.data = (float)atan2(a, 1.);
+    double line_center = int(a * (cv_ptr->image.rows/2) + b);// ここはラジアン。atan2の返り値は[-pi, pi]が範囲
+    center_distance_float32.data = float( line_center - (cv_ptr->image.cols/2) ); // この段階だとまだピクセル単位
+    
+    center_distance_pub.publish(center_distance_float32);
+    ridge_angle_pub.publish(ridge_angle_float32);
+
     /******/
 
 
@@ -253,6 +266,7 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
     std_msgs::Float32 center_float32;
     center_float32.data = center_center;
     center_pub.publish(center_float32);
+
 
 
 //    ROS_INFO("center_center : %f [個目]", center_center);

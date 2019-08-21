@@ -10,7 +10,7 @@
 #include <string>
 
 
-#define image_height 480
+#define image_height 440
 #define image_width 640
 
 //畝の領域推定のときの閾値計算の割合
@@ -161,12 +161,12 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
     }
 
     //CV_32FC1型の要素を持つ配列depthとCV_8UC1型の要素を持つ配列imgを用意。画素数はcv_ptrと一緒。
-    cv::Mat depth(cv_ptr->image.rows, cv_ptr->image.cols, CV_32FC1);
-    cv::Mat img(cv_ptr->image.rows, cv_ptr->image.cols, CV_8UC1);
-    cv::Mat img3(cv_ptr->image.rows, cv_ptr->image.cols, CV_16UC1);
+    cv::Mat depth(image_height, cv_ptr->image.cols, CV_32FC1);
+    cv::Mat img(image_height, cv_ptr->image.cols, CV_8UC1);
+    cv::Mat img3(image_height, cv_ptr->image.cols, CV_16UC1);
 
     //iは行数(縦)
-    for(i = 0; i < cv_ptr->image.rows;i++){
+    for(i = 0; i < image_height;i++){
         float* Dimage = cv_ptr->image.ptr<float>(i);//画像のi行目の先頭画素のポインタを取得
         float* Iimage = depth.ptr<float>(i);//用意した配列のi行目の先頭画素のポインタを取得
         char* Ivimage = img.ptr<char>(i);
@@ -217,11 +217,11 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
 
     /***最小二乗法***/
     double a,b;
-//    double n = cv_ptr->image.rows;//ここエラーの原因。depth拾えてない文も計算してしまってる。
+//    double n = image_height;//ここエラーの原因。depth拾えてない文も計算してしまってる。
     double n = num_of_ridge_line;
     ROS_INFO("num_of_ridge_line : %d", num_of_ridge_line);
     double sigma_x, sigma_y, sigma_xy, sigma_xx;
-    for(int i=0; i<cv_ptr->image.rows; i++){
+    for(int i=0; i<image_height; i++){
         if(center[i] > 0){//center[i]がnanじゃないときのみ追加
             sigma_xy += i * center[i];
             sigma_x += i;
@@ -233,14 +233,14 @@ void depth_estimater::depthImageCallback(const sensor_msgs::ImageConstPtr& msg){
     b = (sigma_xx*sigma_y - sigma_xy*sigma_x)/(n*sigma_xx - sigma_x*sigma_x);
 
     x_0 = int(b);
-    x_max = int(a*cv_ptr->image.rows + b);
+    x_max = int(a*image_height + b);
     ROS_INFO("a: %8.3lf  b: %8.3lf", a, b);
     ROS_INFO("x_0 : %d  x_max : %d", x_0, x_max);
 
     std_msgs::Float32 center_distance_float32; // TODO　単位どうしよ？
     std_msgs::Float32 ridge_angle_float32; //rad
     ridge_angle_float32.data = (float)atan2(a, 1.);
-    double line_center = int(a * (cv_ptr->image.rows/2) + b);// ここはラジアン。atan2の返り値は[-pi, pi]が範囲
+    double line_center = int(a * (image_height/2) + b);// ここはラジアン。atan2の返り値は[-pi, pi]が範囲
     center_distance_float32.data = float( line_center - (cv_ptr->image.cols/2) ); // この段階だとまだピクセル単位
     
     center_distance_pub.publish(center_distance_float32);

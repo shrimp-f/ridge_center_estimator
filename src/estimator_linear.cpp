@@ -16,6 +16,9 @@
 //畝の領域推定のときの閾値計算の割合
 #define THRESHOLD_RATIO 0.9
 
+#define INPUT_TOPIC "/camera/depth/image_rect_raw"
+//#define INPUT_TOPIC "/camera/aligned_depth_to_color/image_raw"
+
 cv_bridge::CvImage dimg;
 
 //cameraに映るdepthの最大と最小を求めて、畝かどうかの判別の閾値を作る。
@@ -62,19 +65,19 @@ depth_estimater::depth_estimater(){
             <param name="input_color_image_topic" value="/pico_flexx_link_ir/image_raw"/>
 
 */
-    sub_depth = nh.subscribe<sensor_msgs::Image>("/camera/depth/image_rect_raw", 10, &depth_estimater::depthImageCallback, this);//for gazebo-> /pico_flexx_link/depth_registered/image_raw
+    sub_depth = nh.subscribe<sensor_msgs::Image>(INPUT_TOPIC, 10, &depth_estimater::depthImageCallback, this);//for gazebo-> /pico_flexx_link/depth_registered/image_raw
     sub_rgb = nh.subscribe<sensor_msgs::Image>("/camera/color/image_raw", 10, &depth_estimater::rgbImageCallback, this);
 
     //for gazebo-> /pico_flexx_link_ir/image_raw
-    center_pub = nh.advertise<std_msgs::Float32>("/debug/cabbage/center", 10);
-    center_distance_pub = nh.advertise<std_msgs::Float32>("/debug/estimator_linear/center_distance", 10);
-    ridge_angle_pub = nh.advertise<std_msgs::Float32>("/debug/estimator_linear/ridge_angle", 10);
+    center_pub = nh.advertise<std_msgs::Float32>("/cabbage/center", 10);
+    center_distance_pub = nh.advertise<std_msgs::Float32>("/estimator_linear/center_distance", 10);
+    ridge_angle_pub = nh.advertise<std_msgs::Float32>("/estimator_linear/ridge_angle", 10);
 
 
      //open cvの画像をrosトピックとしてパブリッシュするため。
     image_transport::ImageTransport it(nh);
-    rgb_pub = it.advertise("/debug/estimator_linear/rgb",10);
-    d_pub = nh.advertise<sensor_msgs::Image>("/debug/estimator_linear/d", 10);
+    rgb_pub = it.advertise("/estimator_linear/rgb",10);
+    d_pub = nh.advertise<sensor_msgs::Image>("/estimator_linear/d", 10);
 //    d_rgb_pub = nh.advertise<sensor_msgs::Image>("/debug/estimator_linear/d_rgb", 10);
 
 }
